@@ -37,7 +37,7 @@
    easier to change
  */
 
-#define maxAnglePlate 15 // in degrees
+#define maxAnglePlate 5 // Maximum angle the plate can be controled to with the Nunchuck (in degrees)
 #define maxAngleServos 40 // in degrees
 #define ZB 45e-3 // vertial distance between base origin and servo axes
 #define ZP -2e-2 // ertial distance between plaform orign and attachement points
@@ -69,14 +69,14 @@
 
 #define fcof 0.4
 
-#define serialPeriod 100 //ms
+#define serialPeriod 10 //ms
 #define serialSpeed 115200 //bauds
 
 #define modePin 12 // do not use 13 is has a led connected to it
 
-float CP=40, 
-      CI=210, 
-      CD=1300;
+float CP=20, 
+      CI=10, 
+      CD=2000;
 /***************************************************/
 /************* Class OneDimControl ******************/
 /***************************************************/
@@ -129,7 +129,11 @@ float alpha[6];
 WiiChuck chuck = WiiChuck();
 
 int valX=0,
-    valY=0;
+    valY=0,
+    valPhi=0,
+    valTheta=0,
+    valC=0,
+    valZ=0;
 
 /************** Platform ******************************/
   
@@ -204,19 +208,46 @@ float targetX, targetY;
 
 void writeInfoOnSerial()
 {
-  //Dump platform position
+
+  //Dump ball position
+  Serial.print("BS");
+  Serial.print(' ');
   Serial.print(ballX,5);
   Serial.print(' ');
   Serial.print(ballY,5);
   Serial.print(' ');
-  Serial.print(phi,5);
+  Serial.print(0,5);
   Serial.print(' ');
-  Serial.println(theta,5);
-  /*Serial.println(T[0],5);
-  Serial.println(T[1],5);
-  Serial.println(T[2],5);*/
+  Serial.print(0,5);
+  Serial.print(' ');
+  Serial.print(0,5);
+  Serial.print(' ');
+  Serial.println(0,5);
   
-  //Dump ball position
+  //Dump servo angles
+  Serial.print("SA");
+  Serial.print(' ');
+  for (int i=0;i<5;i++)
+  {
+    Serial.print(alpha[i],5);
+    Serial.print(' ');
+  }
+  Serial.println(alpha[5],5);
+  
+  // Nunchuck position
+  Serial.print("NP");
+  Serial.print(' ');
+  Serial.print(valX);
+  Serial.print(' ');
+  Serial.print(valY);
+  Serial.print(' ');
+  Serial.print(valPhi);
+  Serial.print(' ');
+  Serial.print(valTheta);
+  Serial.print(' ');
+  Serial.print(valC);
+  Serial.print(' ');
+  Serial.println(valZ);
 }
 
 void setup()
@@ -229,7 +260,6 @@ void setup()
   
   // Serial connection
   Serial.begin(serialSpeed);
-  Serial.println("platjoy02");
   Serial.flush();
 
   // Nunchuck
@@ -261,7 +291,7 @@ void setup()
 
 void loop()
 {
-  
+  t.update();
   if(digitalRead(modePin) == HIGH)
   {
     /* ###### AUTOMATIC MODE ###### */
@@ -300,9 +330,13 @@ void loop()
     chuck.update();
     valX = chuck.readJoyX();
     valY = chuck.readJoyY();
+    valPhi = chuck.readRoll();
+    valTheta = chuck.readPitch();
+    valC = (int)chuck.cPressed();
+    valZ = (int)chuck.zPressed();
     theta   = map(valX, joyXmin, joyXmax, -maxAnglePlate, maxAnglePlate);
     phi = map(valY, joyYmin, joyYmax, maxAnglePlate, -maxAnglePlate);
-    psi = 0.0;
+    psi = 0.0;    
 
     psi = rad(psi);
     theta = rad(theta);
@@ -347,41 +381,14 @@ void loop()
     float N = 2*la[i]*(cos(beta[i])*(p[i][0]+T[0]-b[i][0])+sin(beta[i])*(p[i][1]+T[1]-b[i][1]));
     alpha[i] = deg(asin(L/sqrt(sq(M)+sq(N))) - atan(N/M));
 
-    if(isnan(alpha[i]))
-    {
-      /*
-      Serial.println("NaN value -> BREAK");
-      Serial.println("l L M N");
-      Serial.println(l,5);
-      Serial.println(L,5);
-      Serial.println(M,5);
-      Serial.println(N,5);
-      Serial.print("angle_"); Serial.print(i); Serial.print(" ");
-      Serial.println(alpha[i],5);
-      */
-      
-    }
-    else if (abs(alpha[i]) > maxAngleServos)
-    {
-      /*
-      Serial.print("angle_"); Serial.print(i); Serial.print(" too large: ");
-      Serial.println(alpha[i],5);
-      */
-    }
-    else
-    {
+    if(!isnan(alpha[i]) & (abs(alpha[i]) < maxAngleServos))
+    {      
       int sign;
       // Negative angle if the servo is odd
       if(i%2>0)
         sign=1;
        else
         sign=-1;
-
-      /*
-      //Dump the servo angles
-      Serial.print("angle_"); Serial.print(i); Serial.print(" ");
-      Serial.println(90+sign*alpha[i]);
-      */
 
       // Apply the servo angles
       servos[i].write(90+sign*alpha[i]);
