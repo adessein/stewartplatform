@@ -4,7 +4,7 @@
  * Wii Nunchuck
  *
  * Arnaud DESSEIN
- * https://adessein@bitbucket.org/adessein/stewartplatform
+ * https://github.com/adessein/stewartplatform
  */
 
 /* (yaw, psi)
@@ -19,11 +19,11 @@
  *     Y (pitch, theta)
  */
 
-#include <Servo.h>
+#include <Adafruit_PWMServoDriver.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <math.h>
-#include <WiiChuck.h>
+#include "WiiChuck.h"
 #include <Timer.h>
 #include <Adafruit_STMPE610.h>
 
@@ -39,6 +39,8 @@
 
 #define maxAnglePlate 5 // Maximum angle the plate can be controled to with the Nunchuck (in degrees)
 #define maxAngleServos 40 // in degrees
+#define SERVOMIN  125 // this is the 'minimum' pulse length count (out of 4096)
+#define SERVOMAX  485  // this is the 'maximum' pulse length count (out of 4096)
 #define ZB 45e-3 // vertial distance between base origin and servo axes
 #define ZP -2e-2 // ertial distance between plaform orign and attachement points
 #define H0 15.79e-2 // Home position [m]
@@ -120,10 +122,9 @@ float rad(float a) {return a/180.0*M_PI;}
 float deg(float a) {return a/M_PI*180.0;}
 
 /*********** Servos ********************************/
-Servo servos[6];
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 float vec_l[6][3]; // vector leg
 float alpha[6];
-
 
 /*********** WiiChuck ***************************/
 WiiChuck chuck = WiiChuck();
@@ -206,6 +207,13 @@ float targetX, targetY;
 /*************** Main functions ********************/
 /***************************************************/
 
+int angleToPulse(float ang){
+   int pulse = map(ang,0, 180, SERVOMIN,SERVOMAX);// map angle of 0 to 180 to Servo min and Servo max 
+   Serial.print("Angle: ");Serial.print(ang);
+   Serial.print(" pulse: ");Serial.println(pulse);
+   return pulse;
+}
+
 void writeInfoOnSerial()
 {
 
@@ -276,13 +284,9 @@ void setup()
   //Serial and Timer
   t.every(serialPeriod, writeInfoOnSerial);
 
-  // Configuring ports 2 to 8 as servo outputs
-  // It is important to keep 0 and 1 unused because they are used for
-  // serial communication
-  for(int i=0; i<6; i++)
-  {
-    servos[i].attach(i+2);
-  }
+  // PCA9685 and Servos
+  pwm.begin();
+  pwm.setPWMFreq(60);  // Analog servos run at ~60 Hz updates
   
   // Definition of the target point
   targetX = stmpeX0;
@@ -390,8 +394,12 @@ void loop()
        else
         sign=-1;
 
+      //Dump the servo angles
+      Serial.print("angle_"); Serial.print(i); Serial.print(" ");
+      Serial.println(90+sign*alpha[i]);
+
       // Apply the servo angles
-      servos[i].write(90+sign*alpha[i]);
+      pwm.setPWM(i, 0, angleToPulse(90+sign*alpha[i]));
     }
   }
 }
